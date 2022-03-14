@@ -1,5 +1,7 @@
 const express = require('express');
 
+const port = process.env.PORT || 8080;
+
 const app = express();
 
 app.use(express.json());
@@ -20,6 +22,6 @@ app.get("/user/:id  ",(req,res) => {
     res.json(dummyData);
 });
 
-app.listen(8080, () => {
+app.listen(port, () => {
     console.log("server starting listen");
 });
