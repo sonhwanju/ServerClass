@@ -4,8 +4,6 @@ const port = process.env.PORT || 8080;
 
 const app = express();
 
-app.use(express.json());
-
 app.get("/",(req,res) => {
     res.send("web game");
 });
@@ -20,7 +18,7 @@ app.get("/user/:id  ",(req,res) => {
     console.log(dummyData.userId);
 
     res.json(dummyData);
-});
+}); 
 
 app.listen(port, () => {
     console.log("server starting listen");
