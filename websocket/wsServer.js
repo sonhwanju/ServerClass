@@ -16,6 +16,12 @@ wsService.on("connection", socket => {
         console.log(data);
         socket.send(JSON.stringify({data}));        
     });
+
+    socket.interval = setInterval(() => {
+        if(socket.readyState === socket.OPEN) {
+            socket.send("server message to client");
+        }
+    },3000);
 });
 
 wsService.on("listening", () => {
