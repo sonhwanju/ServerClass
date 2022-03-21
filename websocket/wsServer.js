@@ -1,10 +1,11 @@
 const WebSocket = require('ws');
 
-const wsService = new WebSocket.Server({port:process.env.PORT}, () => {
+const wsService = new WebSocket.Server({port:process.env.PORT || 8080}, () => {
     console.log("웹 소켓이 8080에서 구동중")
 });
 
 wsService.on("connection", socket => {
+    socket.id = socketIdx++;
     console.log("소켓 연결");
 
     socket.on("close", () => {
@@ -14,14 +15,8 @@ wsService.on("connection", socket => {
     socket.on("message", msg => {
         const data = JSON.parse(msg);
         console.log(data);
-        socket.send(JSON.stringify({data}));        
+        socket.send(JSON.stringify({data}));
     });
-
-    socket.interval = setInterval(() => {
-        if(socket.readyState === socket.OPEN) {
-            socket.send("server message to client");
-        }
-    },3000);
 });
 
 wsService.on("listening", () => {
