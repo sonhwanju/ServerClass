@@ -1,16 +1,57 @@
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
+const crypto = require('crypto');
+const util = require('util');
+const moment = require('moment');
 
 const port =  process.env.PORT || 8080;
 const server = http.createServer(express);
 const wsService = new WebSocket.Server({server});
 
-let socketIdx = 1;
+let userList = {};
+let data = {
+    chat : 1,
+    text : "",
+    id: "",
+    target:"",
+    date: moment().format("YYYY-MM-DD HH:mm:ss")
+};
 
-wsService.on("connection", (socket,req) => {
+async function createUID(length) {
+     try {
+        const uid = await util.promisify(crypto.randomBytes)(length);
+        return uid.toString("hex");
+     } catch(e) {
+         console.log(e);
+     }
+}
+
+async function clientJoin(socket) {
+    try {
+        const uid = await createUID(2);        
+        data.id = uid;
+        data.chat = 4;
+        data.text = `${uid} come in!`;
+        data.date = moment().format("YYYY-MM-DD HH:mm:ss");
+
+        userList[uid] = socket;
+
+        for(let key in userList) {
+            data.text = `${key} come in!`;
+            if(key !== uid) wsService.send(JSON.stringify(data));
+        }
+
+        return uid;
+    }catch(e) {
+        console.log(e);
+    }
+}
+
+wsService.on("connection",async (socket,req) => {
     console.log("소켓 연결");
-    socket.id = socketIdx++;
+
+    socket.uid = await clientJoin(socket);
 
     socket.on("close", () => {
         console.log("소켓 연결 해제");
@@ -20,8 +61,10 @@ wsService.on("connection", (socket,req) => {
 
     socket.on("message", msg => {
         wsService.clients.forEach(soc => {
-            if(soc.id == socket.id) return;
-            soc.send(ip + " : " + msg.toString());
+            if(soc.uid === socket.uid) return;
+            //soc.send(`${ip} :  ${msg}`);
+            
+            soc.send(JSON.stringify(data));
         });      
     });
 });
