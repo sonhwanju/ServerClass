@@ -39,7 +39,7 @@ async function clientJoin(socket) {
 
         for(let key in userList) {
             data.text = `${key} come in!`;
-            if(key !== uid) wsService.send(JSON.stringify(data));
+            if(key !== uid) socket.send(JSON.stringify(data));
         }
 
         return uid;
@@ -62,9 +62,7 @@ wsService.on("connection",async (socket,req) => {
     socket.on("message", msg => {
         wsService.clients.forEach(soc => {
             if(soc.uid === socket.uid) return;
-            //soc.send(`${ip} :  ${msg}`);
-            
-            soc.send(JSON.stringify(data));
+            soc.send(JSON.stringify(msg.toString()));
         });      
     });
 });
