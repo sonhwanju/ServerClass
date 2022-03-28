@@ -42,6 +42,10 @@ async function clientJoin(socket) {
             if(key !== uid) socket.send(JSON.stringify(data));
         }
 
+        for(let key in userList) {
+            userList[key].send(JSON.stringify(data));
+        }
+
         return uid;
     }catch(e) {
         console.log(e);
@@ -61,11 +65,20 @@ wsService.on("connection",async (socket,req) => {
 
     socket.on("message", msg => {
         msg = JSON.parse(msg);
-        
+
         data.id = socket.uid;
         data.chat = msg.chat;
         data.text = msg.text;
         data.date = msg.date;
+
+        if(msg.chat == 3) {
+            if(userList[msg.target] !== undefined) {
+                userList[msg.target].send(JSON.stringify(data));
+            }
+            return;
+        }
+        
+        
         wsService.clients.forEach(soc => {
             if(soc.uid === socket.uid) return;
             soc.send(JSON.stringify(data));
