@@ -60,9 +60,15 @@ wsService.on("connection",async (socket,req) => {
     const ip = socket._socket.remoteAddress || req.socket.remoteAddress;
 
     socket.on("message", msg => {
+        msg = JSON.parse(msg);
+        
+        data.id = socket.uid;
+        data.chat = msg.chat;
+        data.text = msg.text;
+        data.date = msg.date;
         wsService.clients.forEach(soc => {
             if(soc.uid === socket.uid) return;
-            soc.send(JSON.stringify(msg.toString()));
+            soc.send(JSON.stringify(data));
         });      
     });
 });
