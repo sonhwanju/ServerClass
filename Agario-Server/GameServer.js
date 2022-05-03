@@ -1,138 +1,199 @@
-const gameloop = require('./GameLoop.js');
-const Vector = require('./Modules/Vector.js');
-const Player = require('./Entity/Player.js');
-const Food = require('./Entity/Food.js');
-
+var Vector = require('./modules/Vector');
+var Player = require('./entity/Player');
+var Food = require('./entity/Food');
+const gameloop = require('./gameloop.js');
 const players = [];
-let sockets = {};
-let gameloopId = null;
-const serverFrameRate = 10.0;
-let lastPlayerId = 1;
+var sockets = {};
+let gameLoopId = null;
+const serverFrameRate = 1.0; //10.0;
+let lastPlayerId = 0;
 
-const START_COUNT_DOWN_OP_CODE = 101;
+//server op code
+const START_COUNTDOWN_OP_CODE = 101;
 const MOVE_PLAYER_OP_CODE = 102;
+const JOIN_PLAYER_OP_CODE = 103;
+const ADD_FOOD_OP_CODE = 105;
 
+//client op code
 const SCENE_READY_OP_CODE = 200;
+const EAT_FOOD_OP_CODE = 202;
 const PING_CHECK_OP_CODE = 205;
 
-function startGame() {
-    gameloopId = gameloop.setGameLoop(() => 
-    {
-        for(let player in players) {
-            console.log("gameloop");
+function StartGame(){
+    //loop create
+    gameLoopId = gameloop.setGameLoop(function(){
+       // addFood();
+        for(let player =0 ; player<players.length ; ++player){
+            movePlayer(players[player]);
+            addFood();
+            //console.log("gameloop! "+player);
         }
-    },1000 / serverFrameRate);
+    }, 2000.0/serverFrameRate);
+
+    gameloop.setGameLoop(function(){
+        sendUpdates();
+    }, 1000.0/serverFrameRate);
 }
 
-function stopGame() {
-    if(gameloopId != null) {
-        gameloop.clearGameLoop(gameloopId);
-        gameloopId = null;
+function StopGame(){
+    //loop clear
+    if(gameLoopId != null){
+        gameloop.clearGameLoop(gameLoopId);
+        gameLoopId = null;
     }
 }
 
-function getNewPlayerId() {
-    return lastPlayerId++;
+function getRandomPosition(){
+    return new Vector(
+        Math.floor(Math.random()*20 +1), 
+        Math.floor(Math.random()*10 +1)
+    );
 }
 
-function getRandomPosition() {
-    return new Vector(Math.floor(Math.random() * 1920 + 1),
-     Math.floor(Math.random() * 1080 + 1));
-}
-
-function getRandomColor() {
-    let colorRGB = [255,10,Math.random() * 256];
-
-    colorRGB.sort(() => {
-        return 0.5-Math.random();
-    })
-
+function getRandomColor(){
+    var colorRGB = [255, 10,  Math.floor(Math.random() * 256)];
+    colorRGB.sort(function(){
+       return 0.5-Math.random(); 
+    });
     return {
-      r:colorRGB[0],
-      g:colorRGB[1],
-      b:colorRGB[2]  
+        r:colorRGB[0],
+        g:colorRGB[1],
+        b:colorRGB[2]
     };
 }
 
-function spawnPlayer(ws) {
-    let ownerId = getNewPlayerId();
-    let pos = getRandomPosition();
-    let c = getRandomColor();
-    let cell = new Player(ownerId,pos,c.r,c.g,c.b);
-
-    players.push(cell);
-    ws.send(JSON.stringify(cell));
+function getNewPlayerId(){
+    return lastPlayerId++;
 }
 
-const foodToAdd = 30;
-const foods = [];
+function movePlayer(player){
+    var x = 0, y = 0;
+    var target ={
+        x: player.posX - player.targetX,
+        y: player.posY - player.targetY
+    };
 
-function addFood() {
-    while(foodToAdd--) {
-        let pos = getRandomPosition();
-        let c = getRandomColor();
-    
-        let food = new Food(1,pos,c.r,c.g,c.b);
-        foods.push(food);
+    var deg = Math.atan2(target.y, target.x);
+    var speed = 3;
+    var deltaX = speed * Math.sin(deg);
+    var deltaY = speed * Math.cos(deg);
+    x += deltaX;
+    y += deltaY;
+
+    player.posX = x;
+    player.posY = y;
+}
+
+function spawnPlayer(ws){
+    var ownerId = ws.clientId;
+    var pos = getRandomPosition();
+    var c = getRandomColor();
+    var mass = 1;
+    var cell = new Player(ownerId, pos, c.r, c.g, c.b, ownerId, mass); //nickname
+    console.log('spawning player : '+ownerId);
+
+    msg.opCode = JOIN_PLAYER_OP_CODE;
+    msg.socketId = ws.clientId;
+    msg.player = cell;
+    players.push(cell);
+
+    for(var key in players){ //나(클라이언트)에게 이미 플레이하던 유저들의 정보를 보냄.
+        msg.player = players[key];
+        if(key != ownerId) ws.send(JSON.stringify(msg));
+    }
+
+    for(var key in players){ //이미 존재하던 플레이어들에게 새로접속한 나의 존재를 알림.
+        sockets[key].send(JSON.stringify(msg));
     }
 }
 
-function removeFood() {
+var foodToAdd = 30;
+const foods = [];
 
+function addFood(){
+    if(foodToAdd < 0) return;
+    while(foodToAdd--){
+        var pos = getRandomPosition();
+        var c = getRandomColor();
+        var food = new Food(1, pos, c.r, c.g, c.b);
+        foods.push(food);
+    }
+
+    //for test
+    for(var key in players){
+        msg.opCode = ADD_FOOD_OP_CODE;
+        msg.foods = foods;
+        console.log("add food:"+JSON.stringify(msg));
+        sockets[key].send(JSON.stringify(msg));
+    }
 }
 
+function removeFood(){
+    
+}
 
-function pingCheck(ws) {
+function pingCheck(ws){
     msg.socketId = ws.clientId;
     msg.opCode = PING_CHECK_OP_CODE;
     ws.send(JSON.stringify(msg));
 }
 
-let msg = {
-    socketId : -1,
-    opCode : 0,
+function sendUpdates(){
+    players.forEach(function(p){
+        msg.opCode = MOVE_PLAYER_OP_CODE;
+        msg.player = p;
+        msg.foods = foods;
+        console.log("sendUpdates:"+p.targetX);
+        sockets[p.owner].send(JSON.stringify(msg)); 
+    });
 }
 
-const WebSocket = require("ws");
-const Food = require('./Entity/Food.js');
-const wsServer = new WebSocket.Server({port:process.env.PORT || 3003}, () => {
-    console.log("server started");
-    startGame();
+var msg = {
+    socketId : -1,
+    opCode : 0,
+    foods:[],
+    player:null
+};
+
+const WebSocket = require('ws');
+const wsserver = new WebSocket.Server({port:process.env.PORT || 3003}, ()=>{
+    console.log("server started!");
+    StartGame();
 });
 
-wsServer.on('connection', (ws) => {
+wsserver.on('connection', function connection(ws){
     //ws.send("Hello! I am a server");
-    console.log("hello new client");
-    //players.push(1);
-
     ws.clientId = msg.socketId = getNewPlayerId();
-    msg.opCode = START_COUNT_DOWN_OP_CODE;
+    msg.opCode = START_COUNTDOWN_OP_CODE;
+    sockets[ws.clientId] = ws;
+    ws.send(JSON.stringify(msg));
+    console.log("hello new client : "+ ws.clientId);
 
-    sockets[ws.clientId] = ws;  
-
-    ws.on('message', data => {
-        if(data.sender != 0) {
+    ws.on('message',(data)=>{
+        if(data.sender != 0){
             msg = JSON.parse(data.toString());
-            switch(msg.opCode) {
+            switch(msg.opCode){
                 case SCENE_READY_OP_CODE:
                     spawnPlayer(ws);
                     break;
                 case PING_CHECK_OP_CODE:
                     pingCheck(ws);
                     break;
-                default:
-                    console.log(`[Warning] Unrecognized opCode in msg`);
+                case MOVE_PLAYER_OP_CODE:
+                    players[msg.socketId] = msg.player;
                     break;
+                default:
+                    console.log("[Warning] Unrecognized opCode in msg");
             }
         }
     });
 
-    ws.on('close', () => {
+    ws.on('close',()=>{
         console.log("connection close");
-        stopGame();
+        StopGame();
     });
 });
 
-wsServer.on('listening', () => {
+wsserver.on('listening', ()=>{
     console.log(`listening on ${process.env.PORT}`);
 });
